@@ -91,7 +91,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	if err := executor.Execute(hls, ctx); err != nil {
+	if err := executor.Execute(hls, ctx, false); err != nil {
 		log.Fatalf("Error executing FFmpeg command: %v", err)
 	}
 }
