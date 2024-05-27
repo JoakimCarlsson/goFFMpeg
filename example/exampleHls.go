@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"goFFMpeg/ffmpeg"
-	"goFFMpeg/ffmpeg/audio"
-	"goFFMpeg/ffmpeg/video"
+	"github.com/JoakimCarlsson/goFFMpeg/ffmpeg"
+	"github.com/JoakimCarlsson/goFFMpeg/ffmpeg/audio"
+	"github.com/JoakimCarlsson/goFFMpeg/ffmpeg/video"
 	"log"
 	"time"
 )
