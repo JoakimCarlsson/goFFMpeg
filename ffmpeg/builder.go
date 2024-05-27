@@ -2,8 +2,8 @@ package ffmpeg
 
 import (
 	"fmt"
-	"goFFMpeg/ffmpeg/audio"
-	"goFFMpeg/ffmpeg/video"
+	"github.com/JoakimCarlsson/goFFMpeg/ffmpeg/audio"
+	"github.com/JoakimCarlsson/goFFMpeg/ffmpeg/video"
 	"os"
 	"path/filepath"
 	"strings"
