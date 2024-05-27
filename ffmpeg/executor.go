@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 type Executor struct {
@@ -17,31 +18,46 @@ type Executor struct {
 	OnOutputDataUpdated   func(output string)
 }
 
-func (e *Executor) Execute(command *ArgumentBuilder, ctx context.Context) error {
+func (e *Executor) Execute(command *ArgumentBuilder, ctx context.Context, runInParallel bool) error {
+	if runInParallel {
+		return e.executeInParallel(command, ctx)
+	}
+	return e.executeSequentially(command, ctx)
+}
+
+func (e *Executor) executeInParallel(command *ArgumentBuilder, ctx context.Context) error {
+	var wg sync.WaitGroup
+	errChan := make(chan error, 1)
+
 	for _, argument := range command.Build() {
-		fullCommand := getFFMpegPath() + " " + argument
-		fmt.Println("Executing command:", fullCommand)
+		wg.Add(1)
+		go func(arg string) {
+			defer wg.Done()
+			if err := e.executeCommand(arg, ctx); err != nil {
+				select {
+				case errChan <- err:
+				default:
+				}
+			}
+		}(argument)
+	}
 
-		args := splitArgs(argument)
-		fmt.Printf("args: %+v\n", args)
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
 
-		processCmd := exec.CommandContext(ctx, getFFMpegPath(), args...)
-		fmt.Println("Command: ", processCmd.String())
-		processCmd.Stdout = os.Stdout
+	if err, ok := <-errChan; ok {
+		return err
+	}
 
-		stderr, err := processCmd.StderrPipe()
-		if err != nil {
-			return fmt.Errorf("failed to get stderr pipe: %w", err)
-		}
+	return nil
+}
 
-		if err := processCmd.Start(); err != nil {
-			return fmt.Errorf("failed to start FFmpeg process: %w", err)
-		}
-
-		go e.readStream(stderr, ctx)
-
-		if err := processCmd.Wait(); err != nil {
-			return fmt.Errorf("FFMpeg process exited with error: %w", err)
+func (e *Executor) executeSequentially(command *ArgumentBuilder, ctx context.Context) error {
+	for _, argument := range command.Build() {
+		if err := e.executeCommand(argument, ctx); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -74,6 +90,30 @@ func splitArgs(cmd string) []string {
 		args = append(args, currentArg.String())
 	}
 	return args
+}
+
+func (e *Executor) executeCommand(argument string, ctx context.Context) error {
+	args := splitArgs(argument)
+
+	processCmd := exec.CommandContext(ctx, getFFMpegPath(), args...)
+	processCmd.Stdout = os.Stdout
+
+	stderr, err := processCmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to get stderr pipe: %w", err)
+	}
+
+	if err := processCmd.Start(); err != nil {
+		return fmt.Errorf("failed to start FFmpeg process: %w", err)
+	}
+
+	go e.readStream(stderr, ctx)
+
+	if err := processCmd.Wait(); err != nil {
+		return fmt.Errorf("FFMpeg process exited with error: %w", err)
+	}
+
+	return nil
 }
 
 func (e *Executor) readStream(stream io.ReadCloser, ctx context.Context) {
